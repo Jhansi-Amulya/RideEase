@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>RideEase Chat</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 p-6">
+    <div class="max-w-2xl mx-auto bg-white shadow-md rounded p-4">
+      <h2 class="text-xl font-bold mb-4 text-blue-600">
+        📢 RideEase Community Chat
+      </h2>
+      <div
+        id="chat"
+        class="h-80 overflow-y-auto border p-3 mb-4 rounded bg-gray-50"
+      ></div>
+      <form id="chatForm" class="flex gap-2">
+        <input
+          id="messageInput"
+          class="flex-1 p-2 border rounded"
+          placeholder="Type a message..."
+          required
+        />
+        <button class="bg-blue-600 text-white px-4 py-2 rounded">Send</button>
+      </form>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+      const socket = io("http://localhost:5000"); // update for deployed backend
+      const chat = document.getElementById("chat");
+      const form = document.getElementById("chatForm");
+      const input = document.getElementById("messageInput");
+
+      const user = JSON.parse(localStorage.getItem("user")) || {
+        email: "guest@svecw.edu.in",
+      };
+
+      // Show previous messages
+      socket.on("chatHistory", (messages) => {
+        messages.forEach((msg) => {
+          appendMessage(msg.sender, msg.text);
+        });
+      });
+
+      // New message received
+      socket.on("newMessage", (msg) => {
+        appendMessage(msg.sender, msg.text);
+      });
+
+      // Send message
+      form.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const text = input.value.trim();
+        if (text) {
+          socket.emit("sendMessage", {
+            sender: user.email,
+            text,
+          });
+          input.value = "";
+        }
+      });
+
+      function appendMessage(sender, text) {
+        const div = document.createElement("div");
+        div.className = "mb-2";
+        div.innerHTML = `<strong>${sender}</strong>: ${text}`;
+        chat.appendChild(div);
+        chat.scrollTop = chat.scrollHeight;
+      }
+    </script>
+  </body>
+</html>

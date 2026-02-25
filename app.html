@@ -1,0 +1,389 @@
+<!-- Full updated RideEase app.html including view ride status, request filtering, and chat -->
+<!-- File: client/app.html -->
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>RideEase Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 font-sans">
+    <header
+      class="bg-blue-600 text-white p-4 flex justify-between items-center"
+    >
+      <h1 class="text-xl font-bold">🚗 RideEase</h1>
+      <div class="flex items-center gap-2">
+        <span id="username" class="mr-2 font-medium"></span>
+        <img
+          src="./images/logout.jpg"
+          alt="Logout"
+          class="w-10 h-10 rounded-full cursor-pointer border-2 border-white hover:scale-105 transition"
+          title="Logout"
+          onclick="logout()"
+        />
+      </div>
+    </header>
+
+    <main class="p-6 max-w-4xl mx-auto">
+      <div class="mb-4">
+        <button onclick="showSection('offer')" class="tab-btn">
+          Offer Ride
+        </button>
+        <button onclick="showSection('view')" class="tab-btn">
+          View Rides
+        </button>
+        <button onclick="showSection('driver')" class="tab-btn">Driver</button>
+        <button onclick="showSection('chat')" class="tab-btn">Chat</button>
+      </div>
+
+      <!-- Offer Ride -->
+      <section id="offer" class="tab-section hidden">
+        <h2 class="text-xl font-semibold mb-2">Offer a Ride</h2>
+        <form id="offerForm" class="space-y-3">
+          <input
+            name="driverName"
+            class="input"
+            placeholder="Your Name"
+            required
+          />
+          <input
+            name="email"
+            class="input"
+            placeholder="Your SVECW Email"
+            required
+          />
+          <input name="pickup" class="input" placeholder="Pickup" required />
+          <input name="drop" class="input" placeholder="Drop" required />
+          <input name="date" type="date" class="input" required />
+          <input name="time" type="time" class="input" required />
+          <button class="btn">Submit</button>
+        </form>
+      </section>
+
+      <!-- View Rides -->
+      <section id="view" class="tab-section hidden">
+        <h2 class="text-xl font-semibold mb-2">Available Rides</h2>
+        <div id="ridesList" class="space-y-4"></div>
+      </section>
+
+      <!-- Driver Dashboard -->
+      <section id="driver" class="tab-section hidden">
+        <h2 class="text-xl font-semibold mb-2">Driver Dashboard</h2>
+        <div id="requestList"></div>
+      </section>
+
+      <!-- Chat Section -->
+      <section id="chat" class="tab-section hidden">
+        <h2 class="text-xl font-semibold mb-2">Group Chat</h2>
+        <div
+          id="messagesBox"
+          class="bg-white p-4 rounded shadow h-48 overflow-y-auto mb-2"
+        ></div>
+        <form id="messageForm" class="flex gap-2">
+          <input
+            id="messageInput"
+            placeholder="Type a message..."
+            class="input flex-1"
+          />
+          <button class="btn">Send</button>
+        </form>
+      </section>
+    </main>
+
+    <style>
+      .input {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+      }
+      .btn {
+        background-color: #2563eb;
+        color: white;
+        padding: 10px 16px;
+        border-radius: 6px;
+      }
+      .btn:hover {
+        background-color: #1e3a8a;
+      }
+      .tab-btn {
+        margin-right: 8px;
+        padding: 8px 14px;
+        border-radius: 6px;
+        background: #e0e0e0;
+      }
+      .tab-section {
+        margin-top: 20px;
+      }
+    </style>
+
+    <script>
+      const user = JSON.parse(localStorage.getItem("user"));
+      if (!user) window.location.href = "index.html";
+      document.getElementById("username").innerText = `Hi, ${user.name}`;
+
+      function logout() {
+        localStorage.removeItem("user");
+        window.location.href = "index.html";
+      }
+
+      function showSection(id) {
+        document
+          .querySelectorAll(".tab-section")
+          .forEach((sec) => sec.classList.add("hidden"));
+        document.getElementById(id).classList.remove("hidden");
+
+        if (id === "view") fetchRides();
+        if (id === "driver") fetchRequests();
+        if (id === "chat") loadMessages();
+      }
+
+      document
+        .getElementById("offerForm")
+        .addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const data = Object.fromEntries(new FormData(e.target).entries());
+
+          const res = await fetch("http://localhost:5000/rides", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
+          });
+
+          const result = await res.json();
+          if (res.ok) {
+            alert("✅ Ride offered successfully!");
+            e.target.reset();
+            showSection("view");
+          } else {
+            alert(result.message || "Something went wrong.");
+          }
+        });
+
+      async function fetchRides() {
+        const res = await fetch("http://localhost:5000/rides");
+        const rides = await res.json();
+
+        const reqRes = await fetch("http://localhost:5000/requests");
+        const myRequests = (await reqRes.json()).filter(
+          (r) => r.requesterEmail === user.email
+        );
+
+        const list = document.getElementById("ridesList");
+        list.innerHTML = "";
+
+        rides.forEach((ride) => {
+          const isMyRide = ride.email === user.email;
+          const matchedRequest = myRequests.find((r) => r.rideId === ride._id);
+
+          let actionHTML = "";
+          if (isMyRide) {
+            actionHTML = `
+            <button onclick="editRide('${ride._id}')" class="btn bg-green-600 mt-2">Edit</button>
+            <button onclick="deleteRide('${ride._id}')" class="btn bg-red-600 mt-2">Delete</button>
+          `;
+          } else if (matchedRequest) {
+            const statusColor =
+              matchedRequest.status === "accepted"
+                ? "green"
+                : matchedRequest.status === "rejected"
+                ? "red"
+                : "yellow";
+            actionHTML = `<p class="text-${statusColor}-600 font-semibold mt-2">Request ${matchedRequest.status}</p>`;
+          } else {
+            actionHTML = `<button onclick="requestRide('${ride._id}')" class="btn mt-2">Request Ride</button>`;
+          }
+
+          list.innerHTML += `
+          <div class='bg-${
+            isMyRide ? "yellow" : "white"
+          }-50 p-4 rounded shadow'>
+            <p><strong>Driver:</strong> ${
+              isMyRide ? `You (${ride.driverName})` : ride.driverName
+            }</p>
+            <p><strong>From:</strong> ${ride.pickup} → <strong>To:</strong> ${
+            ride.drop
+          }</p>
+            <p><strong>Date:</strong> ${ride.date} at ${ride.time}</p>
+            ${actionHTML}
+          </div>`;
+        });
+      }
+
+      async function requestRide(rideId) {
+        await fetch("http://localhost:5000/requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rideId,
+            email: user.email,
+            requesterName: user.name,
+          }),
+        });
+        alert("✅ Ride requested!");
+        fetchRides();
+      }
+
+      async function editRide(id) {
+        const ride = await fetch(`http://localhost:5000/rides/${id}`).then(
+          (res) => res.json()
+        );
+
+        const pickup = prompt("Pickup location", ride.pickup);
+        const drop = prompt("Drop location", ride.drop);
+        const date = prompt("Date", ride.date);
+        const time = prompt("Time", ride.time);
+
+        if (pickup && drop && date && time) {
+          await fetch(`http://localhost:5000/rides/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pickup, drop, date, time }),
+          });
+          fetchRides();
+        }
+      }
+
+      async function deleteRide(id) {
+        if (confirm("Are you sure you want to delete this ride?")) {
+          await fetch(`http://localhost:5000/rides/${id}`, {
+            method: "DELETE",
+          });
+          fetchRides();
+        }
+      }
+
+      async function fetchRequests() {
+        const res = await fetch(`http://localhost:5000/rides`);
+        const allRides = await res.json();
+
+        const myRides = allRides.filter((ride) => ride.email === user.email);
+        const rideIds = myRides.map((ride) => ride._id);
+
+        const reqRes = await fetch("http://localhost:5000/requests");
+        const allRequests = await reqRes.json();
+
+        const myRequests = allRequests.filter((req) =>
+          rideIds.includes(req.rideId)
+        );
+
+        const list = document.getElementById("requestList");
+        list.innerHTML = "";
+
+        if (myRequests.length === 0) {
+          list.innerHTML = "<p class='text-gray-500'>No ride requests yet.</p>";
+          return;
+        }
+
+        const summary = myRequests.reduce((acc, req) => {
+          acc[req.status] = (acc[req.status] || 0) + 1;
+          return acc;
+        }, {});
+
+        list.innerHTML = `
+        <p class="mb-3 font-medium">Summary:
+          <span class="text-yellow-600">${summary.pending || 0} pending</span>,
+          <span class="text-green-600">${summary.accepted || 0} accepted</span>,
+          <span class="text-red-600">${summary.rejected || 0} rejected</span>
+        </p>
+      `;
+
+        myRequests.forEach((req) => {
+          const div = document.createElement("div");
+          div.className = "bg-blue-50 p-4 rounded shadow mb-2";
+          const isFinal = req.status !== "pending";
+
+          div.innerHTML = `
+          <p><strong>From:</strong> ${req.from} → <strong>To:</strong> ${
+            req.to
+          }</p>
+          <p><strong>Requested by:</strong> ${req.requesterEmail}</p>
+          <p><strong>Time:</strong> ${req.date} at ${req.time}</p>
+          <p><strong>Status:</strong> 
+            <span class="text-${
+              req.status === "accepted"
+                ? "green"
+                : req.status === "rejected"
+                ? "red"
+                : "yellow"
+            }-600 font-semibold">
+              ${req.status}
+            </span>
+          </p>
+          <div class="mt-2 space-x-2">
+            <button class="btn bg-green-600" ${
+              isFinal ? "disabled" : ""
+            } onclick="respondToRequest('${
+            req._id
+          }', 'accepted')">Accept</button>
+            <button class="btn bg-red-600" ${
+              isFinal ? "disabled" : ""
+            } onclick="respondToRequest('${
+            req._id
+          }', 'rejected')">Reject</button>
+          </div>
+        `;
+          list.appendChild(div);
+        });
+      }
+
+      async function respondToRequest(requestId, status) {
+        try {
+          const res = await fetch(
+            `http://localhost:5000/requests/${requestId}`,
+            {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status }),
+            }
+          );
+
+          if (res.ok) {
+            alert(`Request ${status}`);
+            fetchRequests();
+          } else {
+            const data = await res.json();
+            alert(data.message || "Failed to update request");
+          }
+        } catch (err) {
+          console.error("Error updating request:", err);
+          alert("Error updating request");
+        }
+      }
+
+      async function loadMessages() {
+        const res = await fetch("http://localhost:5000/messages");
+        const messages = await res.json();
+        const messagesBox = document.getElementById("messagesBox");
+        messagesBox.innerHTML = "";
+        messages.forEach((msg) => {
+          const msgDiv = document.createElement("div");
+          msgDiv.textContent = `${msg.sender}: ${msg.text}`;
+          messagesBox.appendChild(msgDiv);
+        });
+        messagesBox.scrollTop = messagesBox.scrollHeight;
+      }
+
+      document
+        .getElementById("messageForm")
+        ?.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const messageInput = document.getElementById("messageInput");
+          const msg = messageInput.value.trim();
+          if (!msg) return;
+
+          await fetch("http://localhost:5000/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ sender: user.name, text: msg }),
+          });
+
+          messageInput.value = "";
+          loadMessages();
+        });
+
+      showSection("offer");
+    </script>
+  </body>
+</html>
