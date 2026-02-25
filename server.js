@@ -24,7 +24,7 @@ app.use("/requests", requestRoutes);
 app.use("/messages", messageRoutes);
 
 // MongoDB connection
-mongoose.connect("mongodb+srv://dbUser:dbPassword@cluster0.mudux5o.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0", {
+mongoose.connect("", {
   dbName: "ride_share",
 })
 .then(() => {
@@ -36,3 +36,4 @@ mongoose.connect("mongodb+srv://dbUser:dbPassword@cluster0.mudux5o.mongodb.net/?
 .catch((err) => {
   console.error("❌ MongoDB connection error:", err);
 });
+
